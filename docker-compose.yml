@@ -32,6 +32,43 @@ services:
       retries: 10
     restart: unless-stopped
 
+  postgres:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM postgres:17
+        # wal2json — плагин логического декодирования: превращает WAL в JSON
+        RUN apt-get update \
+         && apt-get install -y --no-install-recommends postgresql-17-wal2json \
+         && rm -rf /var/lib/apt/lists/*
+    command:
+      - postgres
+      - -c
+      - wal_level=logical             # в WAL пишется достаточно данных для логического декодирования
+      - -c
+      - max_replication_slots=4
+      - -c
+      - max_wal_senders=4
+      - -c
+      - max_slot_wal_keep_size=1GB    # если relay лежит долго, слот не съест весь диск
+      - -c
+      - output_plugin_libraries=pgoutput,test_decoding,wal2json  # сторонний плагин нужно разрешить явно
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
+  postgres_data:
   rabbitmq_data:
   redis_data:

@@ -132,12 +132,12 @@ def already_processed(message_id: str) -> bool:
     return db.execute("SELECT 1 FROM inbox WHERE message_id = ?", (message_id,)).fetchone() is not None
 
 
-def save_result(message_id: str, task_id: str, result: dict) -> None:
+def save_result(message_id: str, task_id: str, status: str, result: object) -> None:
     with db:
         db.execute("INSERT INTO inbox (message_id) VALUES (?)", (message_id,))
         db.execute(
-            "UPDATE tasks SET status = 'SUCCESS', result = ? WHERE id = ?",
-            (json.dumps(result), task_id),
+            "UPDATE tasks SET status = ?, result = ? WHERE id = ?",
+            (status, json.dumps(result), task_id),
         )
 
 
@@ -155,19 +155,24 @@ def run_worker() -> None:
         task = json.loads(body)
         log.info("получено сообщение %s (task %s)", message_id[:8], task["task_id"][:8])
 
+        # Дубликат тоже надо ack-нуть, иначе при prefetch_count=1 воркер встанет навсегда
         if already_processed(message_id):
             log.warning("сообщение %s уже есть в inbox — дубликат, пропускаю", message_id[:8])
-            return 
-
-        result = predict(model, task["image_path"])
-        log.info("распознано объектов: %d", len(result["detections"]))
+            ch.basic_ack(method.delivery_tag)
+            return
 
         try:
-            save_result(message_id, task["task_id"], result)
+            status, result = "SUCCESS", predict(model, task["image_path"])
+            log.info("распознано объектов: %d", len(result["detections"]))
+        except Exception as error:  # битая картинка не должна крутиться в очереди вечно
+            log.exception("не удалось обработать task %s", task["task_id"][:8])
+            status, result = "FAILURE", {"error": str(error)}
+
+        try:
+            save_result(message_id, task["task_id"], status, result)
+            log.info("результат и запись в inbox сохранены в одной транзакции")
         except sqlite3.IntegrityError:
             log.warning("сообщение %s параллельно обработал другой воркер — пропускаю", message_id[:8])
- 
-        log.info("результат и запись в inbox сохранены в одной транзакции")
 
         ch.basic_ack(method.delivery_tag)
         log.info("ack %s", message_id[:8])

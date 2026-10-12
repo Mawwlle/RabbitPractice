@@ -32,8 +32,10 @@ model = None  # загружаем в воркере при первой зад�
 @celery.task
 def predict_task(image_path: str):
     global model # НУ ПРОСТИТЕ МЕНЯ НУ Я ТОЖЕ ЧЕЛОВЕК
+
     if model is None:
         model = load_model()
+
     return predict(model, image_path)
 
 

@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.143.0",
     "locust>=2.46.7",
     "pika>=1.4.4",
+    "psycopg2-binary>=2.9.13",
     "python-multipart>=0.0.32",
     "redis>=8.1.0",
     "ultralytics>=8.4.174",
