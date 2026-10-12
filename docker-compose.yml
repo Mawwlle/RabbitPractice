@@ -1,0 +1,37 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    hostname: rabbitmq            # имя узла (rabbit@rabbitmq) должно быть постоянным, иначе данные в volume «потеряются»
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"     # AMQP — сюда подключаются pika, FastStream, Celery
+      - "15672:15672"   # веб-интерфейс и HTTP API
+      - "15692:15692"   # метрики Prometheus
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  rabbitmq_data:
+  redis_data:
